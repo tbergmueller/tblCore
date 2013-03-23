@@ -14,54 +14,21 @@
 #include "m3s/m3s.h"
 #include "m3s/m3s_util.h"
 
-#include "devComMaster.h"
+#include "DevCom.h"
 
-int main(void) {
-
-	m3sFrame_t testFrame;
-	unsigned char testData[]={(unsigned char)'R'};
-
-	m3sCreateFrame(&testFrame, Reset, 0, 0, 0, 1, testData, sizeof(testData));
-
-	//handler.CreateFrame(1, M3SProtocol.BroadCast, 1, data, true, false);
-
-	unsigned char testdata2[]={(unsigned char)'P'};
-	m3sFrame_t testFrame2;
-
-	m3sCreateFrame(&testFrame2,
-			Command,
-			1,
-			1,
-			1,
-			1,
-			testdata2,
-			sizeof(testdata2));
-
-
-
-
-	char test[200];
-
-	printf("%s\n", m3sFrameToString(&testFrame, test));
-
-
-	unsigned char* curByte = m3sStream(&testFrame2, M3S_STREAM_START);
-
-	while(curByte != NULL)
-	{
-		printf("%02x ", *curByte);
-		curByte = m3sStream(&testFrame2, M3S_STREAM_CONTINUE);
-	}
-	printf("\n");
-
+int main(void)
+{
 
 	DevComMaster_t* master = dcm_create(1);
 
-	dcm_start(master, 0, 38400);
+	master->UART = "/dev/ttyUSB0";
 
-	master->SendResetSequence();
+	dcm_start(master, 0, 500000);
 
-	if(master->Ping(2) == 0)
+	master->SendResetSequence(NULL);
+
+
+	if(master->Ping(4, NULL, NULL))
 	{
 		printf("pinged\n");
 	}
@@ -71,7 +38,19 @@ int main(void) {
 	}
 
 
-	while(1);
+	DevComSlaveInformation_t slaveInfo;
+	unsigned char err;
+
+	if(master->ReadSlaveInformation(4, &slaveInfo, &err))
+	{
+		printf("Slave Info received\n");
+	}
+	else
+	{
+		printf("failed to read slave info\n");
+	}
+
+
 
 	return EXIT_SUCCESS;
 }
