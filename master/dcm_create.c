@@ -5,7 +5,7 @@
  *  Author: SchR
  */ 
 
-#include "../devComMaster.h"
+#include "../DevCom.h"
 
 //TODO: look for different solution
 DevComMaster_t hiddenGlobalDevComMaster;
@@ -13,9 +13,13 @@ DevComMaster_t hiddenGlobalDevComMaster;
 DevComMaster_t* dcm_create(unsigned char MasterAddress)
 {
 	unsigned char cnt;
-	for(cnt = 0; cnt < sizeof(hiddenGlobalDevComMaster); cnt++)
+
+	unsigned char* ptr = (unsigned char*)&hiddenGlobalDevComMaster;
+
+	for(cnt = 0; cnt < sizeof(DevComMaster_t); cnt++)
 	{
-		*(unsigned char*)(&hiddenGlobalDevComMaster+cnt) = 0x00;
+		*ptr = 0;
+		ptr++;
 	}
 	
 	//master address consists of 2 bits

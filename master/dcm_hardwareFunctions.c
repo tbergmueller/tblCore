@@ -122,19 +122,22 @@ void *readSerial(void* ptr)
 {
 	while(!stopReading)
 	{
-		char buf [300];
+		unsigned char buf [300];
 		int n = read (fd, buf, sizeof(buf));  // read up to 100 characters if ready to read
 
 		if(n)
 		{
 			int i;
+			printf("Read byte: ");
 			for(i = 0; i<n; i++)
 			{
+				printf("%02x ", buf[i]);
 				dcm_processReceived(buf[i]);
 			}
+
+			printf("\n");
 		}
 	}
-
 	return NULL;
 }
 
@@ -148,17 +151,14 @@ void dcm_send(unsigned char* ch, unsigned short dataLength)
 
 
 
-
 void dcm_start(DevComMaster_t* rMaster, uint32_t vFcpu, uint32_t vBaudrate)
 {
 		currentMaster = rMaster;
-		currentMaster->SendFrame = dcm_sendFrame;
-		currentMaster->SendResetSequence = dcm_sendResetSequence;
-		currentMaster->Ping = dcm_ping;
-		currentMaster->ReceiveFrameHandler = dcm_receiveFrame;
 
-		dcm_rxc_function = dcm_processReceived;
-		dcm_txc_function = dcm_processTxcInterrupt;
+		currentMaster->Ping = dcm_ping;
+		currentMaster->SendResetSequence = dcm_sendResetSequence;
+		currentMaster->ReadSlaveInformation = dcm_readSlaveInfo;
+
 
 		char *portname = "/dev/ttyUSB0";
 
@@ -169,7 +169,7 @@ void dcm_start(DevComMaster_t* rMaster, uint32_t vFcpu, uint32_t vBaudrate)
 				exit(-1);
 		}
 
-		set_interface_attribs (fd, B38400, 0);  // set speed to 115,200 bps, 8n1 (no parity)
+		set_interface_attribs (fd, B500000, 0);  // set speed to 115,200 bps, 8n1 (no parity)
 		set_blocking (fd, 0);                // set no blocking
 
 		pthread_create( &readingThread, NULL, readSerial, (void*) currentMaster);

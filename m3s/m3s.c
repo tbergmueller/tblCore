@@ -117,7 +117,9 @@ unsigned char checkFrameByStream(const unsigned char* pFrameToCheck)
 	{
 		// Because of the order of the struct you may parse the acknowledge frame into a m3sFrame_t
 		// this is a bit tricky though but saves a lot of memory ;)
-		return(calcCRC((m3sFrame_t*)pFrameToCheck) == pFrameToCheck[2]);
+
+
+		return((calcCRC((m3sFrame_t*)pFrameToCheck) ^ pFrameToCheck[2]));
 
 	}
 	else
@@ -148,7 +150,7 @@ unsigned char m3s_parseToFrame(m3sFrame_t* rParsedFrame, unsigned char* rToParse
 	rParsedFrame->CtrlByte = rToParse[0];
 	rParsedFrame->SlaveAddr = rToParse[1];
 
-	if(extractProtocol(rParsedFrame->CtrlByte) != M3S_CTRLBYTE_PROTOCOL_ACK_gc)
+	if(extractProtocol(rParsedFrame->CtrlByte) == M3S_CTRLBYTE_PROTOCOL_ACK_gc)
 	{
 		rParsedFrame->UpperBound = 0;
 		rParsedFrame->Data = NULL;

@@ -45,7 +45,15 @@ uint8_t waitForTimeout()
 	return timeout;
 }
 
-uint8_t dcm_sendFrame(m3sFrame_t* pFrame)
+
+/**
+ * Sends a Frame and wait's for acknowledge (if set in Frame header) and/or answer (if passed accordingly)
+ * @param pFrame	Frame to send
+ * @param vExpectsResponse 1 .. wait for answer, 0.. Fire and Forget
+ * @param oAnswerFrame Pointer to Received frame. Chills somewhere around in workspaces
+ * @return 1 on Success, 0 on Failure
+ */
+uint8_t dcm_sendFrame(m3sFrame_t* pFrame, uint8_t vExpectsResponse, m3sFrame_t** oAnswerFrame)
 {
 	unsigned char* Frame = dcm_getAvailableWorkspace();
 	unsigned short i;
@@ -73,58 +81,103 @@ uint8_t dcm_sendFrame(m3sFrame_t* pFrame)
 		waitingForAck = 1;
 	}
 
+	if(vExpectsResponse)
+	{
+		waitingForAnswer = 1;
+	}
+
+
 	dcm_send(Frame, (pFrame->UpperBound + 1) + M3S_HEADER_LENGTH + M3S_CRC_LENGTH);
 
-	return waitForTimeout();
+
+	uint8_t timeout = waitForTimeout();
+
+	if(vExpectsResponse)
+	{
+		// TODO: Check for passed 0
+		if(timeout)
+		{
+			*oAnswerFrame = NULL;
+		}
+		else
+		{
+			*oAnswerFrame = curAnswerFrame;
+		}
+	}
+
+	return !timeout;
 
 }
 
 
 
 
-
-
-
-
-
-
-// 0.. success, other timeout
-unsigned char dcm_sendFrameReadAnswer(m3sFrame_t* pFrame, m3sFrame_t* oAnswerFrame)
-{
-	curAnswerFrame = oAnswerFrame;
-
-	waitingForAnswer = 1;
-	waitingForAck = 1;
-
-	dcm_sendFrame(pFrame);
-
-
-
-	unsigned char timeout = waitForTimeout();
-
-	if(!timeout)
-	{
-		oAnswerFrame = curAnswerFrame;
-	}
-	else
-	{
-		oAnswerFrame = 0;
-	}
-
-	return(timeout);
-
-}
 
 uint8_t dcm_receiveFrame(m3sFrame_t* recFrame)
 {
 	// TODO: See if this is a response to the frame I sent out...
 	waitingForAck = 0;
 	waitingForAnswer =0;
+	curAnswerFrame = recFrame;
+
 	printf("frame received\n");
+	return 0;
 }
 
-void dcm_sendResetSequence()
+/**
+ * @brief Reads information from a remote slave with specified address.
+ * @param vSlaveAddr SlaveAddress, from whom the information should be retrieved
+ * @param oSlaveInfo Output of received slave information. Does NOT allocate memory.
+ * @param oErrorCode Output of ErrorCode for a more detailed error analysis. Pass NULL if unwanted.
+ * @return 1 on Success, 0 on Failure. Examine oErrorCode!
+ */
+uint8_t dcm_readSlaveInfo(unsigned char vSlaveAddr, DevComSlaveInformation_t* oSlaveInfo, unsigned char* oErrorCode)
 {
+	m3sFrame_t info;
+
+	unsigned char infoRequCmd = 'i';
+
+	m3sCreateFrame(&info,
+			Command,
+			vSlaveAddr,
+			currentMaster->Address,
+			1,
+			1,
+			&infoRequCmd,
+			sizeof(infoRequCmd));
+
+	m3sFrame_t* receivedFrame = NULL;
+
+	unsigned char success = dcm_sendFrame(&info,1,&receivedFrame);
+
+	if(success)
+	{
+		unsigned char i;
+		unsigned char* ptr = (unsigned char*)oSlaveInfo;
+
+		for(i=0; i<sizeof(DevComSlaveInformation_t); i++)
+		{
+			*ptr = receivedFrame->Data[i];
+			ptr++;
+		}
+
+		// Since some are big and some little endian, manually parse DevID
+		oSlaveInfo->DeviceID = (((unsigned short)(receivedFrame->Data[6])) << 8) | (unsigned short)(receivedFrame->Data[7]);
+	}
+
+	return success;
+
+}
+
+
+
+uint8_t dcm_sendResetSequence(unsigned char* oError)
+{
+	if(oError)
+	{
+		*oError = DEVCOM_ERRCODE_NO_DETAILED_ERRORHANDLING;
+	}
+
 	unsigned char* resetSequence = dcm_getAvailableWorkspace();
 	
 	resetSequence[0] = 0x10;
@@ -138,10 +191,23 @@ void dcm_sendResetSequence()
 	{
 		dcm_send(resetSequence, (M3S_HEADER_LENGTH + M3S_CRC_LENGTH + 1));
 	}
+
+	return 1; // no error handling, always sucessful...
 }
 
-uint8_t dcm_ping(unsigned char slaveAddr)
+
+uint8_t dcm_ping(unsigned char slaveAddr, unsigned short* oRTT, unsigned char* oErrorCode)
 {
+	if(oErrorCode)
+	{
+		*oErrorCode = DEVCOM_ERRCODE_NO_DETAILED_ERRORHANDLING;
+	}
+
+	if(oRTT)
+	{
+		oRTT = NULL;
+	}
+
 	unsigned char pingCmd[]={(unsigned char)'P'};
 		m3sFrame_t ping;
 
@@ -155,7 +221,7 @@ uint8_t dcm_ping(unsigned char slaveAddr)
 				sizeof(pingCmd));
 
 		//currentMaster->SendFrame(&ping);
-		return dcm_sendFrame(&ping);
+		return dcm_sendFrame(&ping,0,NULL);
 }
 
 
@@ -166,7 +232,7 @@ void dcm_processReceived(unsigned char pData)
 {
 	static unsigned short byteCnt = 0; // 0 beim ersten Programmaufruf
 	static unsigned char crc = M3S_CRC_INITVAL;
-	static unsigned short upperBound = 0;			// h�chster NUTZDATEN Arrayindex, Anzahl der Nutzdaten
+	static unsigned short upperBound = 0;			// höchster NUTZDATEN Arrayindex, Anzahl der Nutzdaten
 	static unsigned char* workspace = NULL;
 	
 	unsigned char tmpProtocol;
@@ -197,7 +263,7 @@ void dcm_processReceived(unsigned char pData)
 		{
 			// parse into frame
 			m3s_parseToFrame(&lastRecFrame,workspace);
-			currentMaster->ReceiveFrameHandler(&lastRecFrame);
+			dcm_receiveFrame(&lastRecFrame);
 			workspace = NULL;
 		}
 		

@@ -9,13 +9,12 @@
 #ifndef DCM_INTERNAL_H_
 	#define DCM_INTERNAL_H_
 
-	#include "../devComMaster.h"
+	#include "../DevCom.h"
 	#include "../m3s/m3sV2_basicFunctions.h"
 
 	DevComMaster_t* currentMaster;
 
-	DevComMasterRxCCallback_t dcm_rxc_function;
-	DevComMasterTxCCallback_t dcm_txc_function;
+
 
 	#define DCM_STATUS_DEFAULT				0
 	#define DCM_STATUS_RECRESET_bm			0x01 // LSB... check reset, es wurde ein ResetCtrlByte empfangen, w�hrend dem normalen Betrieb. pr�fe weiteren Rahmen
