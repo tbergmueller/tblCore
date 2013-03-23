@@ -28,7 +28,7 @@
 
 	#define DCS_BUFFERSIZE		(256 + M3S_OVERHEAD_LENGTH)
 	
-	// Buffer und g�ltige Daten togglen immer hin und her..
+	// Buffer und gültige Daten togglen immer hin und her..
 	unsigned char dcs_space1[DCS_BUFFERSIZE];
 	unsigned char dcs_space2[DCS_BUFFERSIZE];
 

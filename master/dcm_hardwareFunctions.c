@@ -116,7 +116,7 @@ void dcm_processTxcInterrupt()
 }
 
 
-
+unsigned char stopped = 0;
 
 void *readSerial(void* ptr)
 {
@@ -128,16 +128,17 @@ void *readSerial(void* ptr)
 		if(n)
 		{
 			int i;
-			printf("Read byte: ");
+			//printf("Read byte: ");
 			for(i = 0; i<n; i++)
 			{
-				printf("%02x ", buf[i]);
+				//printf("%02x ", buf[i]);
 				dcm_processReceived(buf[i]);
 			}
 
-			printf("\n");
+			//printf("\n");
 		}
 	}
+	stopped = 1;
 	return NULL;
 }
 
@@ -147,6 +148,16 @@ void dcm_send(unsigned char* ch, unsigned short dataLength)
 }
 
 
+void dcm_stop(DevComMaster_t* rMaster)
+{
+	stopped = 0;
+	stopReading = 1;
+
+	while(!stopped)
+	{
+		// wait
+	}
+}
 
 
 
@@ -157,7 +168,12 @@ void dcm_start(DevComMaster_t* rMaster, uint32_t vFcpu, uint32_t vBaudrate)
 
 		currentMaster->Ping = dcm_ping;
 		currentMaster->SendResetSequence = dcm_sendResetSequence;
-		currentMaster->ReadSlaveInformation = dcm_readSlaveInfo;
+		currentMaster->RequestSlaveInformation = dcm_readSlaveInfo;
+		currentMaster->Request = dcm_request;
+		currentMaster->SendCommand = dcm_command;
+		currentMaster->SendData = dcm_data;
+		currentMaster->SendCommandBroadcast = dcm_commandBC;
+		currentMaster->SendDataBroadcast = dcm_dataBC;
 
 
 		char *portname = "/dev/ttyUSB0";

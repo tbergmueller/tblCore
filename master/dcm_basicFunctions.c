@@ -22,6 +22,7 @@ static m3sFrame_t* curAnswerFrame;
 
 static unsigned char waitingForAck = 0;
 static unsigned char waitingForAnswer = 0;
+static signed short lastCRC = -1;
 
 // Stellt einen Pointer auf verwendbaren Speicher zur Verf�gung (w�hlt aus den 2 Spaces aus)
 unsigned char* dcm_getAvailableWorkspace()
@@ -53,7 +54,7 @@ uint8_t waitForTimeout()
  * @param oAnswerFrame Pointer to Received frame. Chills somewhere around in workspaces
  * @return 1 on Success, 0 on Failure
  */
-uint8_t dcm_sendFrame(m3sFrame_t* pFrame, uint8_t vExpectsResponse, m3sFrame_t** oAnswerFrame)
+uint8_t dcm_sendFrame(m3sFrame_t* pFrame, uint8_t vExpectsResponse, m3sFrame_t** oAnswerFrame, unsigned char* oErrorCode)
 {
 	unsigned char* Frame = dcm_getAvailableWorkspace();
 	unsigned short i;
@@ -68,10 +69,8 @@ uint8_t dcm_sendFrame(m3sFrame_t* pFrame, uint8_t vExpectsResponse, m3sFrame_t**
 	{
 		Frame[i + M3S_HEADER_LENGTH] = pFrame->Data[i];								// Daten kopieren und Verpacken...
 	}
-	
-	
+
 	Frame[pFrame->UpperBound + 1 + M3S_HEADER_LENGTH] = crc8_frameBased(Frame, pFrame->UpperBound + 1 + M3S_HEADER_LENGTH, M3S_CRC_INITVAL);
-	
 
 	waitingForAnswer = 0;
 	waitingForAck = 0;
@@ -89,28 +88,82 @@ uint8_t dcm_sendFrame(m3sFrame_t* pFrame, uint8_t vExpectsResponse, m3sFrame_t**
 
 	dcm_send(Frame, (pFrame->UpperBound + 1) + M3S_HEADER_LENGTH + M3S_CRC_LENGTH);
 
-
+	lastCRC = -1; // reset
 	uint8_t timeout = waitForTimeout();
 
-	if(vExpectsResponse)
+
+	// ################ done, evaluate
+	if(timeout)
 	{
-		// TODO: Check for passed 0
-		if(timeout)
+		if(lastCRC < 0) // nothing happened, never got so far as to check a CRC
 		{
-			*oAnswerFrame = NULL;
+			SET_ERR_CODE(oErrorCode, DEVCOM_ERRCODE_TIMEOUT); // ordinary timeout
 		}
 		else
 		{
+			if(lastCRC != 0)
+			{
+				SET_ERR_CODE(oErrorCode, DEVCOM_ERRCODE_CRC); // timeout because CRC mismatch
+			}
+		}
+		return 0; // error
+	}
+
+
+
+	// If response was required
+	if((pFrame->CtrlByte & (M3S_CTRLBYTE_ACK_OR_MC_bm)) || vExpectsResponse)
+	{
+		// Check Slave-Adress of replied frame
+		if(pFrame->SlaveAddr != curAnswerFrame->SlaveAddr)
+		{
+			SET_ERR_CODE(oErrorCode,DEVCOM_ERRCODE_SLAVEADDR_MISMATCH);
+			return 0;
+		}
+
+		// Check if master address is set to my address
+		if((pFrame->CtrlByte & (3<<M3S_CTRLBYTE_MASTERADDR_gp)) != (curAnswerFrame->CtrlByte & (3<<M3S_CTRLBYTE_MASTERADDR_gp)))
+		{
+			SET_ERR_CODE(oErrorCode,DEVCOM_ERRCODE_MASTERADDR_MISMATCH);
+			return 0;
+		}
+
+
+		// Check if protocol matches..
+		unsigned char recProt = curAnswerFrame->CtrlByte & M3S_CTRLBYTE_PROTOCOL_gm;
+
+		if(recProt != M3S_CTRLBYTE_PROTOCOL_CMD_ANSWER_gc && recProt != M3S_CTRLBYTE_PROTOCOL_ACK_gc)
+		{
+			SET_ERR_CODE(oErrorCode,DEVCOM_ERRCODE_PROTOCOL_MISMATCH);
+			return 0;
+		}
+
+		if(vExpectsResponse)
+		{
 			*oAnswerFrame = curAnswerFrame;
+			if(recProt != M3S_CTRLBYTE_PROTOCOL_CMD_ANSWER_gc)
+			{
+				SET_ERR_CODE(oErrorCode,DEVCOM_ERRCODE_PROTOCOL_MISMATCH);
+				return 0;
+			}
+		}
+		else
+		{
+			if(pFrame->CtrlByte & (M3S_CTRLBYTE_ACK_OR_MC_bm)) // i wanted some ack
+			{
+				// here should only be ack-protocol ;)
+				if(!(curAnswerFrame->CtrlByte & (M3S_CTRLBYTE_ACK_OR_MC_bm)))
+				{
+					SET_ERR_CODE(oErrorCode, DEVCOM_ERRCODE_NAK_RECEIVED);
+					return 0; // error
+				}
+			}
 		}
 	}
 
+
 	return !timeout;
-
 }
-
-
-
 
 
 uint8_t dcm_receiveFrame(m3sFrame_t* recFrame)
@@ -120,7 +173,7 @@ uint8_t dcm_receiveFrame(m3sFrame_t* recFrame)
 	waitingForAnswer =0;
 	curAnswerFrame = recFrame;
 
-	printf("frame received\n");
+	//printf("frame received\n");
 	return 0;
 }
 
@@ -133,22 +186,15 @@ uint8_t dcm_receiveFrame(m3sFrame_t* recFrame)
  */
 uint8_t dcm_readSlaveInfo(unsigned char vSlaveAddr, DevComSlaveInformation_t* oSlaveInfo, unsigned char* oErrorCode)
 {
-	m3sFrame_t info;
-
 	unsigned char infoRequCmd = 'i';
 
-	m3sCreateFrame(&info,
-			Command,
-			vSlaveAddr,
-			currentMaster->Address,
-			1,
-			1,
-			&infoRequCmd,
-			sizeof(infoRequCmd));
+	DevComPayload_t p;
+	DevComPayload_t out;
 
-	m3sFrame_t* receivedFrame = NULL;
+	p.Length = 1;
+	p.Data = &infoRequCmd;
 
-	unsigned char success = dcm_sendFrame(&info,1,&receivedFrame);
+	unsigned char success = currentMaster->Request(vSlaveAddr, &p, &out, oErrorCode);
 
 	if(success)
 	{
@@ -157,16 +203,120 @@ uint8_t dcm_readSlaveInfo(unsigned char vSlaveAddr, DevComSlaveInformation_t* oS
 
 		for(i=0; i<sizeof(DevComSlaveInformation_t); i++)
 		{
-			*ptr = receivedFrame->Data[i];
+			*ptr = out.Data[i];
 			ptr++;
 		}
 
 		// Since some are big and some little endian, manually parse DevID
-		oSlaveInfo->DeviceID = (((unsigned short)(receivedFrame->Data[6])) << 8) | (unsigned short)(receivedFrame->Data[7]);
+		oSlaveInfo->DeviceID = (((unsigned short)(out.Data[6])) << 8) | (unsigned short)(out.Data[7]);
 	}
 
 	return success;
 
+}
+
+
+uint8_t dcm_dataBC(unsigned char vMulticastAddress, const DevComPayload_t* pData, unsigned char* oErrorCode)
+{
+	m3sFrame_t data;
+
+	m3sCreateFrame(&data,
+				DataBroadcast,
+				vMulticastAddress,
+				currentMaster->Address,
+				0,
+				1,
+				pData->Data,
+				pData->Length);
+
+	return dcm_sendFrame(&data,0,NULL, oErrorCode);
+}
+
+uint8_t dcm_commandBC(unsigned char vMulticastAddress, const DevComPayload_t* pCommand, unsigned char* oErrorCode)
+{
+	m3sFrame_t cmd;
+
+	m3sCreateFrame(&cmd,
+				CommandBroadcast,
+				vMulticastAddress,
+				currentMaster->Address,
+				0,
+				1,
+				pCommand->Data,
+				pCommand->Length);
+
+	return dcm_sendFrame(&cmd,0,NULL, oErrorCode);
+}
+
+
+uint8_t dcm_command(unsigned char vSlaveAddr, const DevComPayload_t* pCommand, unsigned char vAcknowledgeRequired, unsigned char* oErrorCode)
+{
+	m3sFrame_t cmd;
+
+		m3sCreateFrame(&cmd,
+					Command,
+					vSlaveAddr,
+					currentMaster->Address,
+					vAcknowledgeRequired,
+					1,
+					pCommand->Data,
+					pCommand->Length);
+
+		unsigned char success = dcm_sendFrame(&cmd,0,NULL, oErrorCode);
+
+		return success;
+
+}
+
+
+uint8_t dcm_data(unsigned char vSlaveAddr, const DevComPayload_t* pData, unsigned char vAcknowledgeRequired, unsigned char* oErrorCode)
+{
+	m3sFrame_t dat;
+
+	m3sCreateFrame(&dat,
+				Data,
+				vSlaveAddr,
+				currentMaster->Address,
+				vAcknowledgeRequired,
+				1,
+				pData->Data,
+				pData->Length);
+
+	return dcm_sendFrame(&dat,0,NULL, oErrorCode);
+
+}
+
+
+
+uint8_t dcm_request(unsigned char vSlaveAddr, const DevComPayload_t* rCommand, DevComPayload_t* oPayload, unsigned char* oErrorCode )
+{
+	m3sFrame_t request;
+
+	m3sCreateFrame(&request,
+				Command,
+				vSlaveAddr,
+				currentMaster->Address,
+				1,
+				1,
+				rCommand->Data,
+				rCommand->Length);
+
+	m3sFrame_t* receivedFrame = NULL;
+
+	unsigned char success = dcm_sendFrame(&request,1,&receivedFrame, oErrorCode);
+
+	if(success)
+	{
+		oPayload->Length = receivedFrame->UpperBound+1;
+		oPayload->Data = receivedFrame->Data;
+	}
+	else
+	{
+		oPayload->Length = 0;
+		oPayload->Data = NULL;
+	}
+
+	return success;
 }
 
 
@@ -221,7 +371,7 @@ uint8_t dcm_ping(unsigned char slaveAddr, unsigned short* oRTT, unsigned char* o
 				sizeof(pingCmd));
 
 		//currentMaster->SendFrame(&ping);
-		return dcm_sendFrame(&ping,0,NULL);
+		return dcm_sendFrame(&ping,0,NULL, oErrorCode);
 }
 
 
@@ -258,13 +408,22 @@ void dcm_processReceived(unsigned char pData)
 
 	if((byteCnt == ((upperBound+1) + M3S_OVERHEAD_LENGTH)) || ((tmpProtocol == M3S_CTRLBYTE_PROTOCOL_ACK_gc) && (byteCnt == M3S_ACK_FRAME_LENGTH))) // Wenn erwartetes Frame empfangen wurde
 	{		
-		
+		lastCRC = crc;
 		if(crc==0) // no error...
 		{
 			// parse into frame
 			m3s_parseToFrame(&lastRecFrame,workspace);
 			dcm_receiveFrame(&lastRecFrame);
 			workspace = NULL;
+		}
+		else
+		{
+			// CRC MISMATCH!!!
+			if(currentMaster->ReportOnReceiveError != NULL)
+			{
+				currentMaster->ReportOnReceiveError(workspace, byteCnt);
+			}
+
 		}
 		
 		crc = M3S_CRC_INITVAL;
