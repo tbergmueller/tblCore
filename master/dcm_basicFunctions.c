@@ -386,7 +386,8 @@ uint8_t dcm_ping(unsigned char slaveAddr, unsigned short* oRTT, unsigned char* o
 				pingCmd,
 				sizeof(pingCmd));
 
-		//currentMaster->SendFrame(&ping);
+
+
 		return dcm_sendFrame(&ping,0,NULL, oErrorCode);
 }
 
@@ -403,6 +404,7 @@ void dcm_processReceived(unsigned char pData)
 	
 	unsigned char tmpProtocol;
 	
+
 	byteCnt++;	// increase for next Byte, note beneath this line, Byte Numbering starts with 1, like good old VB-Times ;)
 	
 	if(byteCnt == 1 || workspace == NULL)
@@ -413,7 +415,6 @@ void dcm_processReceived(unsigned char pData)
 	workspace[byteCnt-1] = pData;		// save @ receive Buffer
 	crc = crc8(pData, crc);				// permanently calculate CRC, fastest implementation (?)
 	
-	//TODO: implement acknoledge
 	if(byteCnt==3)						// Das dritte Byte ist entweder der CRC des Acknowledge oder das upperBound
 	{
 		upperBound = pData;

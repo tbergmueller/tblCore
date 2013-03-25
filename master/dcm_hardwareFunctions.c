@@ -22,6 +22,21 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+// FIXME remove later on when sure that the line in set_interface_attribs works as well
+ void make_raw(int fd)
+ {
+     struct termios ios;
+
+     //Not a TTY: nothing to do
+     if (!isatty(fd))
+         return;
+
+     tcgetattr(fd, &ios);
+     cfmakeraw(&ios);
+     tcsetattr(fd, TCSANOW, &ios);
+ }
+
+
 
 int
 set_interface_attribs (int fd, int speed, int parity)
@@ -36,6 +51,7 @@ set_interface_attribs (int fd, int speed, int parity)
 
         cfsetospeed (&tty, speed);
         cfsetispeed (&tty, speed);
+        cfmakeraw(&tty);
 
         tty.c_cflag = (tty.c_cflag & ~CSIZE) | CS8;     // 8-bit chars
         // disable IGNBRK for mismatched speed tests; otherwise receive break
@@ -61,6 +77,8 @@ set_interface_attribs (int fd, int speed, int parity)
                 printf ("error %d from tcsetattr", errno);
                 return -1;
         }
+
+      //  make_raw(fd);
         return 0;
 }
 
@@ -128,14 +146,14 @@ void *readSerial(void* ptr)
 		if(n)
 		{
 			int i;
-			//printf("Read byte: ");
+			printf("Read byte: ");
 			for(i = 0; i<n; i++)
 			{
-				//printf("%02x ", buf[i]);
+				printf("%02x ", (buf[i]));
 				dcm_processReceived(buf[i]);
 			}
 
-			//printf("\n");
+			printf("\n");
 		}
 	}
 	stopped = 1;

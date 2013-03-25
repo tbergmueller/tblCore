@@ -28,7 +28,7 @@ void recErrDetected(const unsigned char* rReceiveBuffer, unsigned char length)
 int main(void)
 {
 
-	unsigned char slaveAddr = 13;
+	unsigned char slaveAddr = 1;
 
 	DevComMaster_t* master = dcm_create(1);
 
@@ -102,8 +102,6 @@ int main(void)
 	int i;
 	for(i=1; i<=22; i++)
 	{
-
-
 
 		if(i != 0)
 			data[i-2] = 0x00;

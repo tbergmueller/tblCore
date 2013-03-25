@@ -69,8 +69,8 @@
 
 	#define DC_BROADCAST									0
 
-	#define DC_ACK_REQUIRED								1
-	#define DC_ACK_NO									0
+	#define DC_ACK_REQUIRED									1
+	#define DC_ACK_NO										0
 
 
 
