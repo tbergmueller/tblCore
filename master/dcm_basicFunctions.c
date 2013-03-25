@@ -23,11 +23,27 @@ static m3sFrame_t* curAnswerFrame;
 static unsigned char waitingForAck = 0;
 static unsigned char waitingForAnswer = 0;
 static signed short lastCRC = -1;
+static DevComMaster_t* currentMaster=NULL;
+
+static unsigned char dcs_space1[DCS_BUFFERSIZE];
+	//static unsigned char dcs_space2[DCS_BUFFERSIZE];
+
+
+
+void setCurrentMaster(DevComMaster_t* master)
+{
+	currentMaster = master;
+}
 
 // Stellt einen Pointer auf verwendbaren Speicher zur Verf�gung (w�hlt aus den 2 Spaces aus)
 unsigned char* dcm_getAvailableWorkspace()
 {
 	return(dcs_space1);
+}
+
+DevComMaster_t* getCurrentMaster()
+{
+	return currentMaster;
 }
 
 uint8_t waitForTimeout()

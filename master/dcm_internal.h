@@ -12,8 +12,8 @@
 	#include "../DevCom.h"
 	#include "../m3s/m3sV2_basicFunctions.h"
 
-	DevComMaster_t* currentMaster;
-
+	DevComMaster_t* getCurrentMaster();
+	void setCurrentMaster(DevComMaster_t* master);
 
 
 	#define DCM_STATUS_DEFAULT				0
@@ -29,12 +29,11 @@
 	#define DCS_BUFFERSIZE		(256 + M3S_OVERHEAD_LENGTH)
 	
 	// Buffer und gültige Daten togglen immer hin und her..
-	unsigned char dcs_space1[DCS_BUFFERSIZE];
-	unsigned char dcs_space2[DCS_BUFFERSIZE];
 
-	uint32_t dc_fcpu;
-	uint32_t dc_baudrate;
+
+	//static uint32_t dc_fcpu;
+	//static uint32_t dc_baudrate;
 	
-	volatile unsigned char changeBaudrateFlag;
+	static volatile unsigned char changeBaudrateFlag=0;
 
 #endif /* DCM_INTERNAL_H_ */

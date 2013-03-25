@@ -164,7 +164,9 @@ void dcm_stop(DevComMaster_t* rMaster)
 
 void dcm_start(DevComMaster_t* rMaster, uint32_t vFcpu, uint32_t vBaudrate)
 {
-		currentMaster = rMaster;
+
+	setCurrentMaster(rMaster);
+	DevComMaster_t* currentMaster = getCurrentMaster();
 
 		currentMaster->Ping = dcm_ping;
 		currentMaster->SendResetSequence = dcm_sendResetSequence;
