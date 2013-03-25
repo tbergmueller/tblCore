@@ -28,7 +28,7 @@ void recErrDetected(const unsigned char* rReceiveBuffer, unsigned char length)
 int main(void)
 {
 
-	unsigned char slaveAddr = 4;
+	unsigned char slaveAddr = 1;
 
 	DevComMaster_t* master = dcm_create(1);
 
@@ -124,6 +124,27 @@ int main(void)
 		printf("UPDATE COMMAND FAILURE\n");
 	}
 
+	int dimmCnt = 0;
+	while(1)
+	{
+		unsigned char dimmDat[] = {'D', (dimmCnt%256)};
+		payload.Length = 2;
+		payload.Data = dimmDat;
+
+
+		if(master->SendCommandBroadcast(DC_BROADCAST, &payload, NULL))
+		{
+			printf("Dimm Command Sent\n");
+		}
+		else
+		{
+			printf("Dimm COMMAND FAILURE\n");
+		}
+
+		dimmCnt++;
+
+		usleep(10000);
+	}
 
 	dcm_stop(master);
 

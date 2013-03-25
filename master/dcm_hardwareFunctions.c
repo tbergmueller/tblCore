@@ -176,7 +176,7 @@ void dcm_start(DevComMaster_t* rMaster, uint32_t vFcpu, uint32_t vBaudrate)
 		currentMaster->SendDataBroadcast = dcm_dataBC;
 
 
-		char *portname = "/dev/ttyUSB0";
+		char *portname = currentMaster->UART;
 
 		fd = open (portname, O_RDWR | O_NOCTTY | O_SYNC);
 		if (fd < 0)
