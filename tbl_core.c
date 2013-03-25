@@ -22,13 +22,13 @@
 
 void recErrDetected(const unsigned char* rReceiveBuffer, unsigned char length)
 {
-	printf("Found Receive Error with %d bytes\n", length);
+	printf("Found Receive Error with %d bytes with Addr in Frame %x\n", length, rReceiveBuffer[1]);
 }
 
 int main(void)
 {
 
-	unsigned char slaveAddr = 1;
+	unsigned char slaveAddr = 13;
 
 	DevComMaster_t* master = dcm_create(1);
 
@@ -93,21 +93,45 @@ int main(void)
 		data[cnt] = 0;
 	}
 
-	data[1] = 0xff;
+	//data[1] = 0xff;
 
 	DevComPayload_t nulldaten;
-	nulldaten.Length = sizeof(data);
-	nulldaten.Data = data;
+				nulldaten.Length = sizeof(data);
+				nulldaten.Data = data;
 
-
-
-	if(master->SendData(slaveAddr, &nulldaten, DC_ACK_REQUIRED, NULL))
+	int i;
+	for(i=1; i<=22; i++)
 	{
-		printf("Data Sent\n");
-	}
-	else
-	{
-		printf("DATA SEND FAILURE\n");
+
+
+
+		if(i != 0)
+			data[i-2] = 0x00;
+
+		if(i == 11 || i == 22)
+		{
+			nulldaten.Data[0] = i/10;
+			nulldaten.Length = 16;
+		}
+		else
+		{
+			data[i-1] = 0xff;
+			nulldaten.Length = 32;
+		}
+
+
+		if(master->SendData(i, &nulldaten, DC_ACK_REQUIRED, NULL))
+		{
+			printf("Data Sent to %d\n",i);
+		}
+		else
+		{
+			printf("DATA SEND FAILURE to %d\n", i);
+		}
+
+
+
+
 	}
 
 	DevComPayload_t payload;
@@ -115,7 +139,7 @@ int main(void)
 	payload.Length = 1;
 	payload.Data = (unsigned char*)"U";
 
-	if(master->SendCommand(slaveAddr, &payload, DC_ACK_NO, NULL))
+	if(master->SendCommandBroadcast(DC_BROADCAST, &payload, NULL))
 	{
 		printf("Update Command Sent\n");
 	}
@@ -124,8 +148,8 @@ int main(void)
 		printf("UPDATE COMMAND FAILURE\n");
 	}
 
-	int dimmCnt = 0;
-	while(1)
+	//int dimmCnt = 0;
+	/*while(1)
 	{
 		unsigned char dimmDat[] = {'D', (dimmCnt%256)};
 		payload.Length = 2;
@@ -144,7 +168,7 @@ int main(void)
 		dimmCnt++;
 
 		usleep(10000);
-	}
+	}*/
 
 	dcm_stop(master);
 
