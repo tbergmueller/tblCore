@@ -146,14 +146,14 @@ void *readSerial(void* ptr)
 		if(n)
 		{
 			int i;
-			printf("Read byte: ");
+			//printf("Read byte: ");
 			for(i = 0; i<n; i++)
 			{
-				printf("%02x ", (buf[i]));
+				//printf("%02x ", (buf[i]));
 				dcm_processReceived(buf[i]);
 			}
 
-			printf("\n");
+			//printf("\n");
 		}
 	}
 	stopped = 1;
